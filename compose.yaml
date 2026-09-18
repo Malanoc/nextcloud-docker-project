@@ -1,0 +1,119 @@
+services:
+
+  db:
+    image: mariadb:lts
+    restart: unless-stopped
+
+    command: --transaction-isolation=READ-COMMITTED
+
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${DB_NAME}
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+
+    volumes:
+      - mariadb_data:/var/lib/mysql
+
+    networks:
+      - backend
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mariadb-admin ping -h localhost -u root -p$${MARIADB_ROOT_PASSWORD} --silent"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+    networks:
+      - backend
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+
+  app:
+    image: nextcloud:35-fpm-alpine
+    restart: unless-stopped
+
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    environment:
+      MYSQL_HOST: db
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+
+      REDIS_HOST: redis
+      REDIS_HOST_PASSWORD: ${REDIS_PASSWORD}
+
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS}
+
+    volumes:
+      - nextcloud_data:/var/www/html
+
+    networks:
+      - frontend
+      - backend
+
+
+  web:
+    build:
+      context: ./nginx
+
+    restart: unless-stopped
+
+    depends_on:
+      - app
+
+    ports:
+      - "127.0.0.1:8080:80"
+
+    volumes:
+      - nextcloud_data:/var/www/html:ro
+
+    networks:
+      - frontend
+
+
+volumes:
+  nextcloud_data:
+  mariadb_data:
+
+
+networks:
+  frontend:
+    driver: bridge
+
+  backend:
+    driver: bridge
+    internal: true
