@@ -99,7 +99,7 @@ services:
       - "127.0.0.1:8080:80"
 
     volumes:
-      - nextcloud_data:/var/www/html:ro
+      - nextcloud_data:/var/www/html
 
     networks:
       - frontend
