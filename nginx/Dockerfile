@@ -5,3 +5,5 @@ RUN apk add --no-cache shadow && \
     usermod -aG www-data nginx
 
 COPY nginx.conf /etc/nginx/nginx.conf
+
+#test
