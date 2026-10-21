@@ -1,23 +1,32 @@
+# Docker Compose : déploie Nextcloud avec MariaDB, Redis et Nginx
 services:
 
+  # Base de données relationnelle: conserve les données métier de Nextcloud
   db:
+    # Image MariaDB avec le tag LTS (Long-Term Support)
     image: mariadb:lts
+    # Redémarre automatiquement le conteneur, sauf s'il a été arrêté manuellement
     restart: unless-stopped
 
+    # Isolation READ-COMMITTED : une transaction ne lit que les changements validés
     command: --transaction-isolation=READ-COMMITTED
 
+    # Variables d'environnement lues depuis le fichier .env
     environment:
       MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MARIADB_DATABASE: ${DB_NAME}
       MARIADB_USER: ${DB_USER}
       MARIADB_PASSWORD: ${DB_PASSWORD}
 
+    # Stockage persistant des données de la base de données
     volumes:
       - mariadb_data:/var/lib/mysql
 
+    # Réseau privé pour les échanges entre services internes
     networks:
       - backend
 
+    # Vérification périodique de la disponibilité du serveur MariaDB
     healthcheck:
       test:
         [
@@ -29,21 +38,28 @@ services:
       retries: 10
 
 
+  # Redis : stocke des données temporaires utilisées par Nextcloud
   redis:
+    # Image légère de Redis, basée sur Alpine Linux.
     image: redis:alpine
+    # Redémarre automatiquement le conteneur, sauf s'il a été arrêté manuellement
     restart: unless-stopped
 
+    # Lance Redis en exigeant un mot de passe pour les connexions clientes
     command:
       - redis-server
       - --requirepass
-      - ${REDIS_PASSWORD}
+      - ${REDIS_PASSWORD} # défini dans le fichier .env
 
+    # Variables d'environnement lues depuis le fichier .env
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
 
+    # Réseau privé pour les échanges entre services internes
     networks:
       - backend
 
+    # Envoie PING à Redis et attend la réponse PONG
     healthcheck:
       test:
         [
@@ -55,16 +71,21 @@ services:
       retries: 10
 
 
+  # Application Nextcloud : exécute le code PHP via PHP-FPM
   app:
+    # Image FPM : l'application ne fournit pas directement un serveur HTTP
     image: nextcloud:35-fpm-alpine
+    # Redémarre automatiquement le conteneur, sauf s'il a été arrêté manuellement
     restart: unless-stopped
 
+    # Attend que MariaDB et Redis soient déclarés sains avant de démarrer
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
 
+    # Variables d'environnement lues depuis le fichier .env
     environment:
       MYSQL_HOST: db
       MYSQL_DATABASE: ${DB_NAME}
@@ -78,42 +99,51 @@ services:
       NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
       NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS}
 
+    # Stockage persistant des données de l'application Nextcloud
     volumes:
       - nextcloud_data:/var/www/html
 
+    # Frontend pour communiquer avec Nginx ; backend pour MariaDB et Redis
     networks:
       - frontend
       - backend
 
 
+  # Serveur web Nginx : reçoit HTTP et transmet le traitement PHP à Nextcloud
   web:
     build:
+      # Répertoire contenant le Dockerfile et le nginx.conf personnalisés
       context: ./nginx
 
+    # Redémarre automatiquement le conteneur, sauf s'il a été arrêté manuellement
     restart: unless-stopped
 
+    # Démarre après le conteneur app
     depends_on:
       - app
 
     ports:
+      # Accessible seulement depuis l'hôte local, sur le port 8080
       - "127.0.0.1:8080:80"
 
+    # Stockage persistant des données de l'application Nextcloud
     volumes:
       - nextcloud_data:/var/www/html
 
+    # Réseau frontend pour communiquer avec l'extérieur et le conteneur app
     networks:
       - frontend
 
-
+# Volumes Docker nommés
 volumes:
   nextcloud_data:
   mariadb_data:
 
-
+# Les réseaux bridge isolent les communications entre groupes de services
 networks:
   frontend:
     driver: bridge
 
   backend:
     driver: bridge
-    internal: true
+    internal: true # Le réseau backend est interne et n'est pas exposé à l'extérieur du projet Docker Compose
