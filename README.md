@@ -152,6 +152,10 @@ La directive MariaDB `--transaction-isolation=READ-COMMITTED` définit le niveau
 | Persistance | Créer un fichier, redémarrer les conteneurs, vérifier le fichier | Fichier conservé. |
 | Isolation du réseau | Contrôler les ports publiés avec `docker compose ps` | Seul `127.0.0.1:8080` est publié. |
 
+### Déployement
+
+Nous avons déployer l'image à l'adresse suivante: [Docker Hub](https://hub.docker.com/r/dockerrnadia/nextcloud-docker-project-web)
+
 ## Problèmes rencontrés
 
 ### Erreurs 403 & Problèmes CSS
